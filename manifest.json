@@ -1,0 +1,11 @@
+{
+  "name": "บันทึกรายรับ-รายจ่าย",
+  "short_name": "MoneyLog",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#E7E8E2",
+  "theme_color": "#6E8368",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

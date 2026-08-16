@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>บันทึกรายรับ-รายจ่าย</title>
+<meta name="theme-color" content="#6E8368">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <h1>บันทึกรายรับ-รายจ่าย</h1>
+  </header>
+
+  <main>
+    <section id="view-add" class="view">
+      <form id="entry-form">
+        <div class="tabs" id="type-tabs">
+          <button type="button" data-type="expense" class="tab active">รายจ่าย</button>
+          <button type="button" data-type="income" class="tab">รายรับ</button>
+        </div>
+
+        <div class="field amount-field">
+          <label for="amount">จำนวนเงิน</label>
+          <div class="amount-input">
+            <span class="cur">฿</span>
+            <input type="number" id="amount" inputmode="decimal" step="0.01" min="0" placeholder="0.00" required>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="date">วันที่</label>
+          <input type="date" id="date" required>
+        </div>
+
+        <div class="field" id="category-field">
+          <label>หมวด</label>
+          <div class="chips" id="category-chips"></div>
+        </div>
+
+        <div class="field" id="subcategory-field" hidden>
+          <label>หมวดย่อย</label>
+          <div class="subrow" id="subcategory-chips"></div>
+        </div>
+
+        <div class="field">
+          <label for="note">โน้ต</label>
+          <input type="text" id="note" placeholder="ไม่บังคับ" autocomplete="off">
+        </div>
+
+        <button type="submit" class="save-btn">บันทึก</button>
+      </form>
+      <p class="toast" id="toast" hidden>บันทึกแล้ว</p>
+    </section>
+
+    <section id="view-history" class="view" hidden>
+      <div class="summary" id="month-summary"></div>
+      <div id="history-list"></div>
+      <p class="empty" id="empty-state" hidden>ยังไม่มีรายการ</p>
+    </section>
+  </main>
+
+  <nav class="bottom-nav">
+    <button type="button" class="nav-btn active" data-view="add">บันทึก</button>
+    <button type="button" class="nav-btn" data-view="history">ประวัติ</button>
+  </nav>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
