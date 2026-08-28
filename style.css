@@ -84,6 +84,14 @@ input[type=date]:focus, input[type=text]:focus{outline:2px solid var(--accent);o
 .save-btn:active{opacity:0.85;}
 .save-btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
 
+.cancel-edit-btn{
+  width:100%;background:none;border:none;color:var(--muted);
+  font:inherit;font-size:0.82rem;padding:0.8rem;margin-top:0.4rem;cursor:pointer;
+}
+.cancel-edit-btn:focus-visible{outline:2px solid var(--accent);}
+
+.tx-row{cursor:pointer;}
+
 .toast{
   text-align:center;margin-top:0.9rem;font-size:0.82rem;color:var(--accent);
   opacity:0;transition:opacity 0.2s;

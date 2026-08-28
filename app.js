@@ -20,6 +20,7 @@ const state = {
   type: "expense",
   category: null,
   subcategory: null,
+  editingId: null,
   transactions: loadTransactions(),
 };
 
@@ -134,6 +135,21 @@ document.getElementById("entry-form").addEventListener("submit", (e) => {
     return;
   }
 
+  if (state.editingId) {
+    const tx = state.transactions.find((t) => t.id === state.editingId);
+    tx.type = state.type;
+    tx.date = date;
+    tx.amount = amount;
+    tx.category = state.type === "expense" ? state.category : null;
+    tx.subcategory = state.type === "expense" ? state.subcategory : null;
+    tx.note = note;
+    saveTransactions();
+    endEdit();
+    showToast();
+    switchView("history");
+    return;
+  }
+
   const tx = {
     id: crypto.randomUUID(),
     type: state.type,
@@ -153,6 +169,11 @@ document.getElementById("entry-form").addEventListener("submit", (e) => {
   syncTx(tx);
 });
 
+document.getElementById("cancel-edit-btn").addEventListener("click", () => {
+  endEdit();
+  switchView("history");
+});
+
 function resetForm() {
   document.getElementById("amount").value = "";
   document.getElementById("note").value = "";
@@ -161,6 +182,41 @@ function resetForm() {
   renderCategoryChips();
   renderSubcategoryChips();
   document.getElementById("date").value = todayStr();
+}
+
+// ---- edit existing transaction ----
+
+function startEdit(tx) {
+  state.editingId = tx.id;
+  state.type = tx.type;
+  state.category = tx.category;
+  state.subcategory = tx.subcategory;
+
+  document.querySelectorAll("#type-tabs .tab").forEach((b) => b.classList.toggle("active", b.dataset.type === tx.type));
+  document.getElementById("category-field").hidden = tx.type !== "expense";
+  document.getElementById("amount").value = tx.amount;
+  document.getElementById("date").value = tx.date;
+  document.getElementById("note").value = tx.note || "";
+  renderCategoryChips();
+  renderSubcategoryChips();
+
+  document.getElementById("save-btn").textContent = "บันทึกการแก้ไข";
+  document.getElementById("cancel-edit-btn").hidden = false;
+
+  switchView("add");
+}
+
+function endEdit() {
+  state.editingId = null;
+  document.getElementById("save-btn").textContent = "บันทึก";
+  document.getElementById("cancel-edit-btn").hidden = true;
+  resetForm();
+}
+
+function switchView(view) {
+  document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+  document.querySelectorAll(".view").forEach((v) => (v.hidden = v.id !== `view-${view}`));
+  if (view === "history") renderHistory();
 }
 
 function showToast() {
@@ -221,6 +277,7 @@ function renderHistory() {
       const label = t.type === "income" ? "รายรับ" : [catName(t.category), t.subcategory].filter(Boolean).join(" · ");
       const row = document.createElement("div");
       row.className = "tx-row";
+      row.dataset.id = t.id;
       row.innerHTML = `
         <div class="tx-main">
           <span class="tx-cat">${escapeHtml(label)}</span>
@@ -236,10 +293,18 @@ function renderHistory() {
   });
 
   list.querySelectorAll(".tx-del").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
       state.transactions = state.transactions.filter((t) => t.id !== btn.dataset.id);
       saveTransactions();
       renderHistory();
+    });
+  });
+
+  list.querySelectorAll(".tx-row").forEach((row) => {
+    row.addEventListener("click", () => {
+      const tx = state.transactions.find((t) => t.id === row.dataset.id);
+      if (tx) startEdit(tx);
     });
   });
 
@@ -338,9 +403,8 @@ document.getElementById("sync-settings-btn").addEventListener("click", () => {
 
 document.querySelectorAll(".nav-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b === btn));
-    document.querySelectorAll(".view").forEach((v) => (v.hidden = v.id !== `view-${btn.dataset.view}`));
-    if (btn.dataset.view === "history") renderHistory();
+    if (btn.dataset.view === "add" && state.editingId) endEdit();
+    switchView(btn.dataset.view);
   });
 });
 
