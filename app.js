@@ -13,6 +13,7 @@ const CATEGORIES = [
   { id: "others", name: "Others", subcategories: [] },
 ];
 
+const APP_VERSION = "1";
 const STORAGE_KEY = "moneylog.transactions.v1";
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
@@ -408,6 +409,28 @@ document.querySelectorAll(".nav-btn").forEach((btn) => {
   });
 });
 
+// ---- update check ----
+
+async function checkForUpdate() {
+  try {
+    const res = await fetch(`version.json?t=${Date.now()}`, { cache: "no-store" });
+    const data = await res.json();
+    if (data.version && data.version !== APP_VERSION) {
+      document.getElementById("update-banner").hidden = false;
+    }
+  } catch (e) {
+    // offline or unreachable — ignore, nothing to report
+  }
+}
+
+document.getElementById("update-reload-btn").addEventListener("click", () => {
+  location.reload();
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") checkForUpdate();
+});
+
 // ---- init ----
 
 document.getElementById("date").value = todayStr();
@@ -415,3 +438,4 @@ renderCategoryChips();
 renderSubcategoryChips();
 renderHistory();
 flushPending();
+checkForUpdate();
