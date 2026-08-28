@@ -150,6 +150,7 @@ document.getElementById("entry-form").addEventListener("submit", (e) => {
   showToast();
   resetForm();
   renderHistory();
+  syncTx(tx);
 });
 
 function resetForm() {
@@ -241,7 +242,97 @@ function renderHistory() {
       renderHistory();
     });
   });
+
+  renderSyncStatus();
 }
+
+// ---- Google Sheets sync ----
+
+const SHEETS_URL_KEY = "moneylog.sheetsUrl";
+const PENDING_SYNC_KEY = "moneylog.pendingSync";
+
+function getSheetsUrl() {
+  return localStorage.getItem(SHEETS_URL_KEY) || "";
+}
+
+function setSheetsUrl(url) {
+  localStorage.setItem(SHEETS_URL_KEY, url);
+}
+
+function getPending() {
+  try {
+    return JSON.parse(localStorage.getItem(PENDING_SYNC_KEY)) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function setPending(ids) {
+  localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(ids));
+}
+
+async function postTx(url, tx) {
+  const res = await fetch(url, { method: "POST", body: JSON.stringify(tx) });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data || data.status !== "ok") throw new Error("sync failed");
+}
+
+async function syncTx(tx) {
+  const url = getSheetsUrl();
+  if (!url) return;
+  try {
+    await postTx(url, tx);
+  } catch (e) {
+    const pending = getPending();
+    if (!pending.includes(tx.id)) {
+      pending.push(tx.id);
+      setPending(pending);
+    }
+  }
+  renderSyncStatus();
+}
+
+async function flushPending() {
+  const url = getSheetsUrl();
+  if (!url) return;
+  const pending = getPending();
+  if (pending.length === 0) return;
+  const stillPending = [];
+  for (const id of pending) {
+    const tx = state.transactions.find((t) => t.id === id);
+    if (!tx) continue;
+    try {
+      await postTx(url, tx);
+    } catch (e) {
+      stillPending.push(id);
+    }
+  }
+  setPending(stillPending);
+  renderSyncStatus();
+}
+
+function renderSyncStatus() {
+  const el = document.getElementById("sync-status");
+  if (!el) return;
+  const url = getSheetsUrl();
+  const pending = getPending();
+  if (!url) {
+    el.textContent = "ยังไม่ได้เชื่อม Google Sheets";
+  } else if (pending.length > 0) {
+    el.textContent = `เชื่อมต่อแล้ว · ค้างซิงก์ ${pending.length} รายการ`;
+  } else {
+    el.textContent = "เชื่อมต่อ Google Sheets แล้ว";
+  }
+}
+
+document.getElementById("sync-settings-btn").addEventListener("click", () => {
+  const current = getSheetsUrl();
+  const input = prompt("วาง Web App URL จาก Google Apps Script:", current);
+  if (input === null) return;
+  setSheetsUrl(input.trim());
+  renderSyncStatus();
+  if (input.trim()) flushPending();
+});
 
 // ---- bottom nav ----
 
@@ -259,3 +350,4 @@ document.getElementById("date").value = todayStr();
 renderCategoryChips();
 renderSubcategoryChips();
 renderHistory();
+flushPending();
