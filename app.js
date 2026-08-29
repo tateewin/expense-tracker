@@ -13,7 +13,7 @@ const CATEGORIES = [
   { id: "others", name: "Others", subcategories: [] },
 ];
 
-const APP_VERSION = "2";
+const APP_VERSION = "3";
 const STORAGE_KEY = "moneylog.transactions.v1";
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const THAI_MONTHS_FULL = [
@@ -222,7 +222,9 @@ function endEdit() {
 function switchView(view) {
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
   document.querySelectorAll(".view").forEach((v) => (v.hidden = v.id !== `view-${view}`));
+  document.getElementById("month-nav").hidden = view === "add";
   if (view === "history") renderHistory();
+  if (view === "overview") renderOverview();
 }
 
 function showToast() {
@@ -249,15 +251,43 @@ function renderMonthLabel() {
   document.getElementById("next-month-btn").disabled = state.historyMonth >= todayStr().slice(0, 7);
 }
 
+function renderCurrentMonthView() {
+  const activeBtn = document.querySelector(".nav-btn.active");
+  if (activeBtn && activeBtn.dataset.view === "overview") renderOverview();
+  else renderHistory();
+}
+
 document.getElementById("prev-month-btn").addEventListener("click", () => {
   state.historyMonth = shiftMonth(state.historyMonth, -1);
-  renderHistory();
+  renderCurrentMonthView();
 });
 
 document.getElementById("next-month-btn").addEventListener("click", () => {
   state.historyMonth = shiftMonth(state.historyMonth, 1);
-  renderHistory();
+  renderCurrentMonthView();
 });
+
+function monthTxs(ym) {
+  return state.transactions.filter((t) => t.date.slice(0, 7) === ym);
+}
+
+function monthTotals(ym) {
+  let inc = 0,
+    exp = 0;
+  monthTxs(ym).forEach((t) => {
+    if (t.type === "income") inc += t.amount;
+    else exp += t.amount;
+  });
+  return { inc, exp };
+}
+
+function summaryHtml(inc, exp) {
+  return `
+    <div class="sum-row"><span>รายรับเดือนนี้</span><span class="income">+${fmt(inc)}</span></div>
+    <div class="sum-row"><span>รายจ่ายเดือนนี้</span><span class="expense">-${fmt(exp)}</span></div>
+    <div class="sum-row net"><span>คงเหลือ</span><span>${fmt(inc - exp)}</span></div>
+  `;
+}
 
 function renderHistory() {
   const list = document.getElementById("history-list");
@@ -266,23 +296,14 @@ function renderHistory() {
 
   renderMonthLabel();
 
-  const txs = state.transactions
-    .filter((t) => t.date.slice(0, 7) === state.historyMonth)
-    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+  const txs = monthTxs(state.historyMonth).sort(
+    (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)
+  );
 
   emptyEl.hidden = txs.length > 0;
 
-  let inc = 0,
-    exp = 0;
-  txs.forEach((t) => {
-    if (t.type === "income") inc += t.amount;
-    else exp += t.amount;
-  });
-  summaryEl.innerHTML = `
-    <div class="sum-row"><span>รายรับเดือนนี้</span><span class="income">+${fmt(inc)}</span></div>
-    <div class="sum-row"><span>รายจ่ายเดือนนี้</span><span class="expense">-${fmt(exp)}</span></div>
-    <div class="sum-row net"><span>คงเหลือ</span><span>${fmt(inc - exp)}</span></div>
-  `;
+  const { inc, exp } = monthTotals(state.historyMonth);
+  summaryEl.innerHTML = summaryHtml(inc, exp);
 
   const groups = {};
   txs.forEach((t) => {
@@ -336,6 +357,148 @@ function renderHistory() {
   });
 
   renderSyncStatus();
+}
+
+// ---- overview: category breakdown + trend ----
+
+function compactNum(n) {
+  return Math.round(n).toLocaleString("th-TH");
+}
+
+function niceMax(value) {
+  if (value <= 0) return 100;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+  const residual = value / magnitude;
+  const niceResidual = residual <= 1 ? 1 : residual <= 2 ? 2 : residual <= 5 ? 5 : 10;
+  return niceResidual * magnitude;
+}
+
+function showChartTooltip(target, label, value) {
+  const tip = document.getElementById("chart-tooltip");
+  const rect = target.getBoundingClientRect();
+  tip.textContent = "";
+  tip.appendChild(document.createTextNode(label + ": "));
+  const strong = document.createElement("strong");
+  strong.textContent = `฿${fmt(value)}`;
+  tip.appendChild(strong);
+  tip.style.left = `${rect.left + rect.width / 2}px`;
+  tip.style.top = `${rect.top - 8}px`;
+  tip.hidden = false;
+}
+
+document.addEventListener("click", (e) => {
+  const tip = document.getElementById("chart-tooltip");
+  if (!tip.hidden && !e.target.closest(".trend-bar")) tip.hidden = true;
+});
+
+function renderOverview() {
+  renderMonthLabel();
+  const { inc, exp } = monthTotals(state.historyMonth);
+  document.getElementById("overview-summary").innerHTML = summaryHtml(inc, exp);
+  renderCategoryChart();
+  renderTrendChart();
+}
+
+function renderCategoryChart() {
+  const wrap = document.getElementById("cat-chart");
+  const emptyEl = document.getElementById("cat-chart-empty");
+
+  const totals = {};
+  monthTxs(state.historyMonth).forEach((t) => {
+    if (t.type !== "expense") return;
+    totals[t.category] = (totals[t.category] || 0) + t.amount;
+  });
+
+  const rows = Object.entries(totals)
+    .map(([id, amount]) => ({ name: catName(id), amount }))
+    .sort((a, b) => b.amount - a.amount);
+
+  emptyEl.hidden = rows.length > 0;
+  wrap.innerHTML = "";
+  if (rows.length === 0) return;
+
+  const max = rows[0].amount;
+  rows.forEach((row) => {
+    const el = document.createElement("div");
+    el.className = "hbar-row";
+    const label = document.createElement("span");
+    label.className = "hbar-label";
+    label.textContent = row.name;
+    const track = document.createElement("div");
+    track.className = "hbar-track";
+    const fill = document.createElement("div");
+    fill.className = "hbar-fill";
+    fill.style.width = `${(row.amount / max) * 100}%`;
+    track.appendChild(fill);
+    const value = document.createElement("span");
+    value.className = "hbar-value";
+    value.textContent = fmt(row.amount);
+    el.append(label, track, value);
+    wrap.appendChild(el);
+  });
+}
+
+function renderTrendChart() {
+  const plot = document.getElementById("trend-plot");
+  plot.innerHTML = "";
+
+  const months = [];
+  for (let i = 5; i >= 0; i--) months.push(shiftMonth(state.historyMonth, -i));
+  const data = months.map((ym) => ({ ym, ...monthTotals(ym) }));
+  const max = niceMax(Math.max(100, ...data.map((d) => Math.max(d.inc, d.exp))));
+
+  [0, 0.5, 1].forEach((frac) => {
+    const line = document.createElement("div");
+    line.className = "trend-grid-line";
+    line.style.bottom = `${frac * 100}%`;
+    plot.appendChild(line);
+
+    const label = document.createElement("span");
+    label.className = "trend-grid-label";
+    label.style.bottom = `${frac * 100}%`;
+    label.textContent = frac === 0 ? "0" : compactNum(max * frac);
+    plot.appendChild(label);
+  });
+
+  const groupsEl = document.createElement("div");
+  groupsEl.className = "trend-groups";
+  const lastYm = months[months.length - 1];
+
+  data.forEach((d) => {
+    const [, m] = d.ym.split("-").map(Number);
+    const isLast = d.ym === lastYm;
+    const group = document.createElement("div");
+    group.className = "trend-group";
+
+    const makeBar = (kind, value, seriesLabel) => {
+      const bar = document.createElement("div");
+      bar.className = `trend-bar ${kind}`;
+      bar.style.height = `${(value / max) * 100}%`;
+      bar.addEventListener("click", (e) => {
+        e.stopPropagation();
+        showChartTooltip(bar, `${seriesLabel} · ${THAI_MONTHS[m - 1]}`, value);
+      });
+      if (isLast && value > 0) {
+        const lbl = document.createElement("span");
+        lbl.className = "trend-bar-label";
+        lbl.textContent = compactNum(value);
+        bar.appendChild(lbl);
+      }
+      return bar;
+    };
+
+    group.appendChild(makeBar("income", d.inc, "รายรับ"));
+    group.appendChild(makeBar("expense", d.exp, "รายจ่าย"));
+
+    const monthLabel = document.createElement("span");
+    monthLabel.className = "trend-month-label";
+    monthLabel.textContent = THAI_MONTHS[m - 1];
+    group.appendChild(monthLabel);
+
+    groupsEl.appendChild(group);
+  });
+
+  plot.appendChild(groupsEl);
 }
 
 // ---- Google Sheets sync ----

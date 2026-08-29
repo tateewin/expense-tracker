@@ -63,12 +63,36 @@
       <p class="toast" id="toast" hidden>บันทึกแล้ว</p>
     </section>
 
-    <section id="view-history" class="view" hidden>
-      <div class="month-nav">
-        <button type="button" id="prev-month-btn" aria-label="เดือนก่อนหน้า">‹</button>
-        <span id="month-label"></span>
-        <button type="button" id="next-month-btn" aria-label="เดือนถัดไป">›</button>
+    <div class="month-nav" id="month-nav" hidden>
+      <button type="button" id="prev-month-btn" aria-label="เดือนก่อนหน้า">‹</button>
+      <span id="month-label"></span>
+      <button type="button" id="next-month-btn" aria-label="เดือนถัดไป">›</button>
+    </div>
+
+    <section id="view-overview" class="view" hidden>
+      <div class="summary" id="overview-summary"></div>
+
+      <div class="chart-card">
+        <div class="chart-head">
+          <span class="chart-title">แยกตามหมวด</span>
+        </div>
+        <div class="hbar-list" id="cat-chart"></div>
+        <p class="empty" id="cat-chart-empty" hidden>ยังไม่มีรายจ่ายเดือนนี้</p>
       </div>
+
+      <div class="chart-card">
+        <div class="chart-head">
+          <span class="chart-title">เทรนด์ 6 เดือน</span>
+          <div class="chart-legend">
+            <span class="legend-item"><i class="swatch income"></i>รายรับ</span>
+            <span class="legend-item"><i class="swatch expense"></i>รายจ่าย</span>
+          </div>
+        </div>
+        <div class="trend-plot" id="trend-plot"></div>
+      </div>
+    </section>
+
+    <section id="view-history" class="view" hidden>
       <div class="summary" id="month-summary"></div>
       <div id="history-list"></div>
       <p class="empty" id="empty-state" hidden>ยังไม่มีรายการ</p>
@@ -79,8 +103,11 @@
     </section>
   </main>
 
+  <div class="chart-tooltip" id="chart-tooltip" hidden></div>
+
   <nav class="bottom-nav">
     <button type="button" class="nav-btn active" data-view="add">บันทึก</button>
+    <button type="button" class="nav-btn" data-view="overview">ภาพรวม</button>
     <button type="button" class="nav-btn" data-view="history">ประวัติ</button>
   </nav>
 </div>
