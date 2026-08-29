@@ -107,6 +107,18 @@ input[type=date]:focus, input[type=text]:focus{outline:2px solid var(--accent);o
 }
 .toast.show{opacity:1;}
 
+.month-nav{
+  display:flex;align-items:center;justify-content:center;gap:1.25rem;
+  margin-bottom:0.9rem;
+}
+.month-nav span{font-size:0.9rem;font-weight:600;color:var(--ink);min-width:9rem;text-align:center;}
+.month-nav button{
+  background:var(--card);border:none;color:var(--accent);font:inherit;font-size:1.1rem;
+  width:2.2rem;height:2.2rem;border-radius:50%;cursor:pointer;line-height:1;
+}
+.month-nav button:disabled{color:var(--muted2);opacity:0.5;cursor:default;}
+.month-nav button:focus-visible{outline:2px solid var(--accent);}
+
 .summary{
   background:var(--card);border-radius:12px;padding:1rem 1.1rem;margin-bottom:1.1rem;
   display:flex;flex-direction:column;gap:0.5rem;

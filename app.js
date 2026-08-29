@@ -13,15 +13,20 @@ const CATEGORIES = [
   { id: "others", name: "Others", subcategories: [] },
 ];
 
-const APP_VERSION = "1";
+const APP_VERSION = "2";
 const STORAGE_KEY = "moneylog.transactions.v1";
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+const THAI_MONTHS_FULL = [
+  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
+];
 
 const state = {
   type: "expense",
   category: null,
   subcategory: null,
   editingId: null,
+  historyMonth: todayStr().slice(0, 7),
   transactions: loadTransactions(),
 };
 
@@ -232,25 +237,46 @@ function showToast() {
 
 // ---- history view ----
 
+function shiftMonth(ym, delta) {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function renderMonthLabel() {
+  const [y, m] = state.historyMonth.split("-").map(Number);
+  document.getElementById("month-label").textContent = `${THAI_MONTHS_FULL[m - 1]} ${y}`;
+  document.getElementById("next-month-btn").disabled = state.historyMonth >= todayStr().slice(0, 7);
+}
+
+document.getElementById("prev-month-btn").addEventListener("click", () => {
+  state.historyMonth = shiftMonth(state.historyMonth, -1);
+  renderHistory();
+});
+
+document.getElementById("next-month-btn").addEventListener("click", () => {
+  state.historyMonth = shiftMonth(state.historyMonth, 1);
+  renderHistory();
+});
+
 function renderHistory() {
   const list = document.getElementById("history-list");
   const summaryEl = document.getElementById("month-summary");
   const emptyEl = document.getElementById("empty-state");
 
-  const txs = [...state.transactions].sort(
-    (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)
-  );
+  renderMonthLabel();
+
+  const txs = state.transactions
+    .filter((t) => t.date.slice(0, 7) === state.historyMonth)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
 
   emptyEl.hidden = txs.length > 0;
 
-  const ym = todayStr().slice(0, 7);
   let inc = 0,
     exp = 0;
   txs.forEach((t) => {
-    if (t.date.slice(0, 7) === ym) {
-      if (t.type === "income") inc += t.amount;
-      else exp += t.amount;
-    }
+    if (t.type === "income") inc += t.amount;
+    else exp += t.amount;
   });
   summaryEl.innerHTML = `
     <div class="sum-row"><span>รายรับเดือนนี้</span><span class="income">+${fmt(inc)}</span></div>
