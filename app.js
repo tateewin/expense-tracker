@@ -13,7 +13,7 @@ const CATEGORIES = [
   { id: "others", name: "Others", subcategories: [] },
 ];
 
-const APP_VERSION = "3";
+const APP_VERSION = "4";
 const STORAGE_KEY = "moneylog.transactions.v1";
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const THAI_MONTHS_FULL = [
@@ -532,6 +532,12 @@ async function postTx(url, tx) {
   if (!res.ok || !data || data.status !== "ok") throw new Error("sync failed");
 }
 
+async function postBatch(url, rows) {
+  const res = await fetch(url, { method: "POST", body: JSON.stringify({ rows }) });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data || data.status !== "ok") throw new Error("batch sync failed");
+}
+
 async function syncTx(tx) {
   const url = getSheetsUrl();
   if (!url) return;
@@ -589,6 +595,48 @@ document.getElementById("sync-settings-btn").addEventListener("click", () => {
   if (input.trim()) flushPending();
 });
 
+// ---- Spendee historical import ----
+
+const SPENDEE_IMPORTED_KEY = "moneylog.spendeeImported";
+
+function updateImportRow() {
+  const row = document.getElementById("import-row");
+  if (row) row.hidden = !!localStorage.getItem(SPENDEE_IMPORTED_KEY);
+}
+
+document.getElementById("import-spendee-btn").addEventListener("click", async () => {
+  if (localStorage.getItem(SPENDEE_IMPORTED_KEY)) return;
+  const btn = document.getElementById("import-spendee-btn");
+  btn.disabled = true;
+  btn.textContent = "กำลังนำเข้า...";
+  try {
+    const res = await fetch("data/spendee-import.json");
+    const rows = await res.json();
+    state.transactions.push(...rows);
+    saveTransactions();
+    localStorage.setItem(SPENDEE_IMPORTED_KEY, "1");
+    updateImportRow();
+    renderCurrentMonthView();
+
+    const url = getSheetsUrl();
+    if (url) {
+      try {
+        await postBatch(url, rows);
+      } catch (e) {
+        const pending = getPending();
+        rows.forEach((r) => pending.push(r.id));
+        setPending(pending);
+        renderSyncStatus();
+        alert("นำเข้าข้อมูลในเครื่องสำเร็จ แต่ sync ไป Sheets ไม่สำเร็จ ระบบจะลองใหม่อัตโนมัติตอนเปิดแอปครั้งถัดไป");
+      }
+    }
+  } catch (e) {
+    alert("นำเข้าไม่สำเร็จ ลองใหม่อีกครั้ง");
+    btn.disabled = false;
+    btn.textContent = "นำเข้า";
+  }
+});
+
 // ---- bottom nav ----
 
 document.querySelectorAll(".nav-btn").forEach((btn) => {
@@ -626,5 +674,6 @@ document.getElementById("date").value = todayStr();
 renderCategoryChips();
 renderSubcategoryChips();
 renderHistory();
+updateImportRow();
 flushPending();
 checkForUpdate();

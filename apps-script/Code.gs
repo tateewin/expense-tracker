@@ -2,7 +2,20 @@ function doPost(e) {
   const sheet = getOrCreateSheet();
   const data = JSON.parse(e.postData.contents);
 
-  sheet.appendRow([
+  if (Array.isArray(data.rows)) {
+    const values = data.rows.map(rowToArray);
+    if (values.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, values.length, 8).setValues(values);
+    }
+    return jsonOutput({ status: "ok", count: values.length });
+  }
+
+  sheet.appendRow(rowToArray(data));
+  return jsonOutput({ status: "ok" });
+}
+
+function rowToArray(data) {
+  return [
     data.id,
     data.date,
     data.type,
@@ -11,11 +24,11 @@ function doPost(e) {
     data.amount,
     data.note || "",
     data.createdAt,
-  ]);
+  ];
+}
 
-  return ContentService.createTextOutput(JSON.stringify({ status: "ok" })).setMimeType(
-    ContentService.MimeType.JSON
-  );
+function jsonOutput(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
 function getOrCreateSheet() {
