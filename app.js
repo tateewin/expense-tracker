@@ -13,7 +13,7 @@ const CATEGORIES = [
   { id: "others", name: "Others", subcategories: [] },
 ];
 
-const APP_VERSION = "4";
+const APP_VERSION = "5";
 const STORAGE_KEY = "moneylog.transactions.v1";
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const THAI_MONTHS_FULL = [
@@ -153,6 +153,7 @@ document.getElementById("entry-form").addEventListener("submit", (e) => {
     endEdit();
     showToast();
     switchView("history");
+    syncTx(tx);
     return;
   }
 
@@ -343,9 +344,11 @@ function renderHistory() {
   list.querySelectorAll(".tx-del").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      state.transactions = state.transactions.filter((t) => t.id !== btn.dataset.id);
+      const id = btn.dataset.id;
+      state.transactions = state.transactions.filter((t) => t.id !== id);
       saveTransactions();
       renderHistory();
+      syncDelete(id);
     });
   });
 
@@ -514,41 +517,52 @@ function setSheetsUrl(url) {
   localStorage.setItem(SHEETS_URL_KEY, url);
 }
 
+// Pending ops are {op: "upsert" | "delete", id}. Older builds stored bare ids,
+// which were always upserts.
 function getPending() {
   try {
-    return JSON.parse(localStorage.getItem(PENDING_SYNC_KEY)) || [];
+    const raw = JSON.parse(localStorage.getItem(PENDING_SYNC_KEY)) || [];
+    return raw.map((p) => (typeof p === "string" ? { op: "upsert", id: p } : p));
   } catch (e) {
     return [];
   }
 }
 
-function setPending(ids) {
-  localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(ids));
+function setPending(ops) {
+  localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(ops));
 }
 
-async function postTx(url, tx) {
-  const res = await fetch(url, { method: "POST", body: JSON.stringify(tx) });
-  const data = await res.json().catch(() => null);
-  if (!res.ok || !data || data.status !== "ok") throw new Error("sync failed");
+function queuePending(op, id) {
+  const ops = getPending().filter((p) => p.id !== id);
+  ops.push({ op, id });
+  setPending(ops);
 }
 
-async function postBatch(url, rows) {
-  const res = await fetch(url, { method: "POST", body: JSON.stringify({ rows }) });
+async function postJson(url, body) {
+  const res = await fetch(url, { method: "POST", body: JSON.stringify(body) });
   const data = await res.json().catch(() => null);
-  if (!res.ok || !data || data.status !== "ok") throw new Error("batch sync failed");
+  if (!res.ok || !data || data.status !== "ok") throw new Error("sheets request failed");
+  return data;
 }
 
 async function syncTx(tx) {
   const url = getSheetsUrl();
   if (!url) return;
   try {
-    await postTx(url, tx);
+    await postJson(url, tx);
   } catch (e) {
-    const pending = getPending();
-    if (!pending.includes(tx.id)) {
-      pending.push(tx.id);
-      setPending(pending);
-    }
+    queuePending("upsert", tx.id);
+  }
+  renderSyncStatus();
+}
+
+async function syncDelete(id) {
+  const url = getSheetsUrl();
+  if (!url) return;
+  try {
+    await postJson(url, { action: "delete", id });
+  } catch (e) {
+    queuePending("delete", id);
   }
   renderSyncStatus();
 }
@@ -559,13 +573,17 @@ async function flushPending() {
   const pending = getPending();
   if (pending.length === 0) return;
   const stillPending = [];
-  for (const id of pending) {
-    const tx = state.transactions.find((t) => t.id === id);
-    if (!tx) continue;
+  for (const p of pending) {
     try {
-      await postTx(url, tx);
+      if (p.op === "delete") {
+        await postJson(url, { action: "delete", id: p.id });
+      } else {
+        const tx = state.transactions.find((t) => t.id === p.id);
+        if (!tx) continue;
+        await postJson(url, tx);
+      }
     } catch (e) {
-      stillPending.push(id);
+      stillPending.push(p);
     }
   }
   setPending(stillPending);
@@ -577,6 +595,7 @@ function renderSyncStatus() {
   if (!el) return;
   const url = getSheetsUrl();
   const pending = getPending();
+  document.getElementById("sheets-actions").hidden = !url;
   if (!url) {
     el.textContent = "ยังไม่ได้เชื่อม Google Sheets";
   } else if (pending.length > 0) {
@@ -595,6 +614,53 @@ document.getElementById("sync-settings-btn").addEventListener("click", () => {
   if (input.trim()) flushPending();
 });
 
+async function runSheetsAction(btn, busyText, action) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = busyText;
+  try {
+    await action();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
+document.getElementById("resync-btn").addEventListener("click", (e) => {
+  const n = state.transactions.length;
+  const ok = confirm(
+    `เขียนข้อมูลในชีตใหม่ทั้งหมดจากในเครื่อง (${n.toLocaleString("th-TH")} รายการ)?\n` +
+      "ข้อมูลเดิมในชีตจะถูกสำรองเก็บไว้เป็นแท็บแยก"
+  );
+  if (!ok) return;
+  runSheetsAction(e.currentTarget, "กำลังซิงก์...", async () => {
+    try {
+      await postJson(getSheetsUrl(), { action: "replaceAll", rows: state.transactions });
+      setPending([]);
+      renderSyncStatus();
+      alert(`ซิงก์แล้ว ${n.toLocaleString("th-TH")} รายการ`);
+    } catch (err) {
+      alert("ซิงก์ไม่สำเร็จ ข้อมูลในชีตยังเหมือนเดิม ลองใหม่อีกครั้ง");
+    }
+  });
+});
+
+document.getElementById("restore-btn").addEventListener("click", (e) => {
+  runSheetsAction(e.currentTarget, "กำลังกู้คืน...", async () => {
+    try {
+      const data = await postJson(getSheetsUrl(), { action: "list" });
+      const have = new Set(state.transactions.map((t) => t.id));
+      const added = data.rows.filter((r) => !have.has(r.id));
+      state.transactions.push(...added);
+      saveTransactions();
+      renderCurrentMonthView();
+      alert(added.length ? `กู้คืนแล้ว ${added.length.toLocaleString("th-TH")} รายการ` : "ข้อมูลในเครื่องครบอยู่แล้ว");
+    } catch (err) {
+      alert("กู้คืนไม่สำเร็จ ลองใหม่อีกครั้ง");
+    }
+  });
+});
+
 // ---- Spendee historical import ----
 
 const SPENDEE_IMPORTED_KEY = "moneylog.spendeeImported";
@@ -611,7 +677,8 @@ document.getElementById("import-spendee-btn").addEventListener("click", async ()
   btn.textContent = "กำลังนำเข้า...";
   try {
     const res = await fetch("data/spendee-import.json");
-    const rows = await res.json();
+    const have = new Set(state.transactions.map((t) => t.id));
+    const rows = (await res.json()).filter((r) => !have.has(r.id));
     state.transactions.push(...rows);
     saveTransactions();
     localStorage.setItem(SPENDEE_IMPORTED_KEY, "1");
@@ -619,13 +686,11 @@ document.getElementById("import-spendee-btn").addEventListener("click", async ()
     renderCurrentMonthView();
 
     const url = getSheetsUrl();
-    if (url) {
+    if (url && rows.length) {
       try {
-        await postBatch(url, rows);
+        await postJson(url, { rows });
       } catch (e) {
-        const pending = getPending();
-        rows.forEach((r) => pending.push(r.id));
-        setPending(pending);
+        setPending([...getPending(), ...rows.map((r) => ({ op: "upsert", id: r.id }))]);
         renderSyncStatus();
         alert("นำเข้าข้อมูลในเครื่องสำเร็จ แต่ sync ไป Sheets ไม่สำเร็จ ระบบจะลองใหม่อัตโนมัติตอนเปิดแอปครั้งถัดไป");
       }
