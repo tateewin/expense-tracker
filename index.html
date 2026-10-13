@@ -109,6 +109,64 @@
         <button type="button" id="import-spendee-btn">นำเข้า</button>
       </div>
     </section>
+
+    <section id="view-recurring" class="view" hidden>
+      <div id="recurring-main">
+        <div class="due-card" id="due-card" hidden>
+          <div class="chart-head"><span class="chart-title">ถึงรอบแล้ว · กรอกยอดจริง</span></div>
+          <div id="due-list"></div>
+        </div>
+        <div class="summary" id="recurring-summary"></div>
+        <div class="day-items" id="recurring-list"></div>
+        <p class="empty" id="recurring-empty" hidden>ยังไม่มีรายการประจำ</p>
+        <button type="button" class="save-btn add-recurring-btn" id="add-recurring-btn">+ เพิ่มรายการประจำ</button>
+      </div>
+
+      <form id="recurring-form" hidden>
+        <div class="field">
+          <label for="rc-name">ชื่อรายการ</label>
+          <input type="text" id="rc-name" placeholder="เช่น Netflix" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="rc-amount">จำนวนเงิน</label>
+          <input type="number" id="rc-amount" inputmode="decimal" step="0.01" min="0" placeholder="0.00">
+        </div>
+        <div class="field">
+          <label>หมวด</label>
+          <div class="chips" id="rc-category-chips"></div>
+        </div>
+        <div class="field" id="rc-subcategory-field" hidden>
+          <label>หมวดย่อย</label>
+          <div class="subrow" id="rc-subcategory-chips"></div>
+        </div>
+        <div class="field">
+          <label>รอบ</label>
+          <div class="seg" id="rc-cycle">
+            <button type="button" data-value="monthly">รายเดือน</button>
+            <button type="button" data-value="yearly">รายปี</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="rc-day">ตัดรอบ</label>
+          <div class="rc-when">
+            <span>วันที่</span>
+            <input type="number" id="rc-day" min="1" max="31" inputmode="numeric">
+            <span id="rc-month-wrap" hidden>เดือน <select id="rc-month"></select></span>
+          </div>
+        </div>
+        <div class="field">
+          <label>การบันทึก</label>
+          <div class="seg" id="rc-mode">
+            <button type="button" data-value="auto">บันทึกอัตโนมัติ</button>
+            <button type="button" data-value="confirm">ยืนยันยอดก่อน</button>
+          </div>
+          <p class="hint" id="rc-mode-hint"></p>
+        </div>
+        <button type="submit" class="save-btn">บันทึก</button>
+        <button type="button" class="cancel-edit-btn" id="rc-cancel-btn">ยกเลิก</button>
+        <button type="button" class="danger-link" id="rc-delete-btn" hidden>ลบรายการประจำนี้</button>
+      </form>
+    </section>
   </main>
 
   <div class="chart-tooltip" id="chart-tooltip" hidden></div>
@@ -117,6 +175,7 @@
     <button type="button" class="nav-btn active" data-view="add">บันทึก</button>
     <button type="button" class="nav-btn" data-view="overview">ภาพรวม</button>
     <button type="button" class="nav-btn" data-view="history">ประวัติ</button>
+    <button type="button" class="nav-btn" data-view="recurring">ประจำ<span class="nav-dot" id="recurring-dot" hidden></span></button>
   </nav>
 </div>
 <script src="app.js"></script>
